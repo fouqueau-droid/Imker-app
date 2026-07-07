@@ -1,0 +1,983 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Imker App">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+<title>Imker App</title>
+
+<!--
+  ============================================================
+  KONFIGURATION — vor dem ersten Start ausfüllen (siehe EINRICHTUNG.md)
+  ============================================================
+-->
+<script>
+  window.APP_CONFIG = {
+    GOOGLE_CLIENT_ID: "DEINE_GOOGLE_CLIENT_ID.apps.googleusercontent.com",
+    WORKER_URL: "https://dein-worker-name.DEIN-SUBDOMAIN.workers.dev",
+    APP_SECRET: "waehle-ein-eigenes-passwort-hier"
+  };
+</script>
+
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600&display=swap');
+  :root{
+    --honey:#C97A2B; --bark:#2B2118; --cream:#F7F1E4; --sage:#6B7F52; --rust:#8B3A3A; --slate:#3D5A6C;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  .app-root{
+    font-family:'Inter',system-ui,sans-serif; background:var(--cream); min-height:100vh;
+    color:var(--bark); padding:16px; max-width:640px; margin:0 auto;
+    padding-bottom: 60px;
+  }
+  .lade-screen{ padding:60px 0; text-align:center; opacity:.6; }
+  h1{ font-family:'Fraunces',serif; font-weight:600; font-size:26px; margin:0; letter-spacing:-.01em; }
+  h2{ font-family:'Fraunces',serif; font-weight:600; font-size:20px; margin:0; }
+  .liste-header{ display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; gap:10px; flex-wrap:wrap; }
+  .liste-header-btns{ display:flex; gap:8px; flex-wrap: wrap; }
+
+  .sync-leiste{ display:flex; align-items:center; justify-content:space-between; gap:8px; background:#fff; border:1px solid #E4D9C3; border-radius:12px; padding:8px 12px; margin-bottom:14px; font-size:12px; }
+  .sync-status{ display:flex; align-items:center; gap:6px; opacity:.75; }
+  .sync-dot{ width:8px; height:8px; border-radius:50%; background:#999; }
+  .sync-dot.ok{ background:var(--sage); }
+  .sync-dot.fehler{ background:var(--rust); }
+  .sync-dot.laeuft{ background:var(--honey); animation: pulse 1s infinite; }
+  @keyframes pulse{ 0%,100%{opacity:1} 50%{opacity:.3} }
+
+  .wetter-card{ background:linear-gradient(135deg,var(--slate),#2b4351); color:#F4EFE2; border-radius:14px; padding:16px 18px; margin-bottom:16px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; }
+  .wetter-haupt{ display:flex; align-items:center; gap:12px; }
+  .wetter-icon{ font-size:30px; line-height:1; }
+  .wetter-temp{ font-family:'Fraunces',serif; font-size:26px; font-weight:600; line-height:1; }
+  .wetter-text{ font-size:12px; opacity:.85; margin-top:2px; }
+  .wetter-details{ display:flex; gap:14px; font-size:12px; opacity:.9; }
+  .wetter-details span{ display:flex; align-items:center; gap:4px; }
+
+  .filter-chips{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px; }
+  .filter-chip{ background:#fff; border:1px solid #E4D9C3; border-radius:20px; padding:6px 12px; font-size:12px; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:4px; color:var(--bark); }
+  .filter-chip.aktiv{ background:var(--honey); color:#fff; border-color:var(--honey); }
+
+  .volk-grid{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .volk-kachel{ background:#fff; border:1px solid #E4D9C3; border-radius:14px; padding:16px; text-align:left; cursor:pointer; display:flex; align-items:center; gap:12px; }
+  .wabe-icon{ width:34px; height:34px; flex-shrink:0; background:var(--honey); clip-path:polygon(25% 0%,75% 0%,100% 50%,75% 100%,25% 100%,0% 50%); }
+  .volk-kachel-name{ font-weight:600; font-size:15px; }
+  .volk-kachel-standort{ font-size:12px; opacity:.6; }
+
+  .leer{ text-align:center; padding:30px 0; opacity:.7; }
+  .leer p{ margin-bottom:12px; }
+
+  .btn-primary{ background:var(--honey); color:#fff; border:none; border-radius:10px; padding:10px 16px; font-size:14px; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:6px; }
+  .btn-primary:disabled{ opacity:.4; cursor:not-allowed; }
+  .btn-primary.voll{ width:100%; justify-content:center; margin:14px 0; }
+  .btn-primary.klein{ padding:6px 12px; font-size:13px; }
+  .btn-secondary{ background:transparent; color:var(--bark); border:1px solid #D8CBAE; border-radius:10px; padding:10px 16px; font-size:14px; cursor:pointer; display:inline-flex; align-items:center; gap:6px; }
+  .btn-secondary.klein{ padding:6px 12px; font-size:13px; }
+  .btn-secondary.danger-text{ color:var(--rust); border-color:#E7C9C0; }
+  .icon-btn{ background:none; border:none; cursor:pointer; color:var(--bark); padding:4px; display:flex; font-size:18px; }
+  .icon-btn.danger{ color:var(--rust); margin-left:auto; }
+
+  .dialog-overlay{ position:fixed; inset:0; background:rgba(43,33,24,.4); display:flex; align-items:center; justify-content:center; padding:16px; z-index:50; }
+  .dialog{ background:#fff; border-radius:16px; padding:20px; width:100%; max-width:400px; display:flex; flex-direction:column; gap:12px; max-height:88vh; overflow-y:auto; }
+  .dialog-header{ display:flex; justify-content:space-between; align-items:center; }
+  .dialog label{ display:flex; flex-direction:column; gap:4px; font-size:13px; font-weight:500; }
+  .dialog input, .dialog select, .eintrag-form input, .eintrag-form select, .eintrag-form textarea{ border:1px solid #D8CBAE; border-radius:8px; padding:8px 10px; font-size:14px; font-family:inherit; }
+  .dialog-actions{ display:flex; justify-content:flex-end; gap:8px; margin-top:6px; flex-wrap: wrap; }
+
+  .inline-neu{ display:flex; gap:8px; align-items:flex-end; }
+  .inline-neu input{ flex:1; border:1px solid #D8CBAE; border-radius:8px; padding:8px 10px; font-size:13px; }
+
+  .standort-liste{ display:flex; flex-direction:column; gap:8px; max-height:200px; overflow-y:auto; }
+  .standort-eintrag{ display:flex; align-items:center; gap:10px; background:var(--cream); border-radius:10px; padding:8px 10px; }
+  .standort-eintrag-info{ flex:1; }
+  .standort-eintrag-name{ font-weight:600; font-size:13px; }
+  .standort-eintrag-beschr{ font-size:11px; opacity:.65; }
+  .standort-neu{ display:flex; flex-direction:column; gap:10px; border-top:1px solid #EFE7D5; padding-top:12px; }
+
+  .sk-header{ display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+  .sk-titel{ flex:1; }
+  .sk-standort{ font-size:12px; opacity:.6; }
+  .standort-auswahl{ display:flex; align-items:center; gap:6px; margin-bottom:14px; }
+  .standort-auswahl select{ border:1px solid #D8CBAE; border-radius:8px; padding:6px 8px; font-size:13px; font-family:inherit; flex:1; }
+
+  .diktat-box{ background:#fff; border:1px solid #E4D9C3; border-radius:14px; padding:14px; margin-bottom:14px; }
+  .diktat-header{ display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; }
+  .diktat-titel{ font-weight:600; font-size:14px; }
+  .mic-btn{ background:var(--sage); color:#fff; border:none; border-radius:20px; padding:8px 14px; font-size:13px; font-weight:600; display:flex; align-items:center; gap:6px; cursor:pointer; }
+  .mic-btn.aktiv{ background:var(--rust); }
+  .hinweis-klein{ font-size:12px; opacity:.6; }
+  .diktat-textarea{ width:100%; margin-top:10px; border:1px solid #D8CBAE; border-radius:8px; padding:8px; font-family:inherit; font-size:13px; }
+  .transkript{ margin-top:10px; font-size:13px; font-style:italic; opacity:.75; }
+  .erkannt-box{ margin-top:10px; background:var(--cream); border-radius:10px; padding:10px; }
+  .erkannt-titel{ font-size:12px; font-weight:600; margin-bottom:6px; }
+  .erkannt-chips{ display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; }
+  .chip{ background:#fff; border:1px solid var(--honey); color:var(--honey); border-radius:20px; padding:3px 10px; font-size:12px; font-weight:600; }
+
+  .karte{ background:#fff; border:1px solid #E4D9C3; border-radius:14px; padding:14px; margin-bottom:14px; }
+  .karte-header{ font-weight:600; font-size:14px; margin-bottom:8px; }
+  .grafik-leer{ font-size:13px; opacity:.6; padding:20px 0; text-align:center; }
+
+  .eintrag-form{ display:flex; flex-direction:column; gap:10px; }
+  .form-zeile{ display:flex; gap:10px; }
+  .form-zeile label{ flex:1; display:flex; flex-direction:column; gap:4px; font-size:12px; font-weight:500; }
+  .eintrag-form label{ display:flex; flex-direction:column; gap:4px; font-size:12px; font-weight:500; }
+  .checkbox-label{ flex-direction:row !important; align-items:center; gap:6px !important; }
+  .checkbox-label input{ width:auto; }
+
+  .ki-box{ background:linear-gradient(135deg,#F0E6CE,var(--cream)); border:1px solid var(--honey); border-radius:14px; padding:14px; margin-bottom:14px; }
+  .ki-header{ display:flex; justify-content:space-between; align-items:center; }
+  .ki-titel{ font-weight:600; font-size:14px; display:flex; align-items:center; gap:6px; }
+  .ki-text{ margin-top:10px; font-size:13px; white-space:pre-wrap; line-height:1.5; }
+  .ki-fehler{ margin-top:8px; font-size:12px; color:var(--rust); }
+
+  .foto-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(72px,1fr)); gap:8px; }
+  .foto-thumb{ position:relative; width:100%; aspect-ratio:1; border-radius:10px; overflow:hidden; border:1px solid #E4D9C3; background:var(--cream); padding:0; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+  .foto-thumb img{ width:100%; height:100%; object-fit:cover; }
+  .foto-thumb-badge{ position:absolute; top:4px; right:4px; background:var(--honey); color:#fff; border-radius:50%; width:16px; height:16px; display:flex; align-items:center; justify-content:center; font-size:10px; }
+  .foto-add{ width:100%; aspect-ratio:1; border-radius:10px; border:1.5px dashed var(--honey); background:none; color:var(--honey); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; cursor:pointer; font-size:20px; }
+  .foto-dialog{ max-width:420px; }
+  .foto-gross-wrap{ display:flex; align-items:center; justify-content:center; background:var(--bark); border-radius:10px; min-height:180px; }
+  .foto-gross{ width:100%; max-height:320px; object-fit:contain; border-radius:10px; }
+  .foto-datum{ font-size:12px; opacity:.6; text-align:center; }
+  .foto-analyse-block{ border-top:1px solid #EFE7D5; padding-top:12px; }
+  .foto-analyse-text{ margin-top:10px; font-size:13px; white-space:pre-wrap; line-height:1.5; background:var(--cream); border-radius:10px; padding:10px; }
+  .foto-analyse-hinweis{ font-size:11px; opacity:.55; margin-top:8px; font-style:italic; }
+
+  .verlauf-liste{ display:flex; flex-direction:column; gap:10px; }
+  .verlauf-eintrag{ border-top:1px solid #EFE7D5; padding-top:10px; }
+  .verlauf-datum{ font-size:12px; font-weight:600; opacity:.7; margin-bottom:4px; }
+  .verlauf-details{ display:flex; flex-wrap:wrap; gap:8px; font-size:12px; }
+  .verlauf-details span{ background:var(--cream); border-radius:6px; padding:2px 8px; }
+  .verlauf-details .warn{ background:#F5E0DA; color:var(--rust); font-weight:600; }
+  .verlauf-notiz{ font-size:12px; opacity:.7; margin-top:6px; font-style:italic; }
+
+  .fehler-banner{ position:fixed; bottom:16px; left:16px; right:16px; background:var(--rust); color:#fff; padding:10px 14px; border-radius:10px; font-size:13px; text-align:center; max-width: 600px; margin: 0 auto; }
+  .google-btn{ background:#fff; color:var(--bark); border:1px solid #D8CBAE; border-radius:10px; padding:8px 14px; font-size:13px; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:6px; }
+
+  .spin{ display:inline-block; animation:spin 1s linear infinite; }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+
+  @media (max-width:420px){ .volk-grid{ grid-template-columns:1fr; } .form-zeile{ flex-direction:column; } }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/plain" id="app-source">
+const { useState, useEffect, useRef, useCallback } = React;
+
+// ============================================================
+// Konfiguration
+// ============================================================
+const CFG = window.APP_CONFIG;
+const MALS_LAT = 46.6853;
+const MALS_LON = 10.5445;
+const FUTTER_OPTIONEN = ["gering", "mittel", "gut", "voll"];
+const GESUNDHEIT_OPTIONEN = ["gut", "auffällig", "kritisch"];
+const DRIVE_DATEINAME = "imker-app-daten.json";
+const LOCAL_KEY = "imker-app-daten-v1";
+const DRIVE_FILEID_KEY = "imker-app-drive-file-id";
+const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
+
+// ============================================================
+// Lokaler Speicher (funktioniert immer, auch offline)
+// ============================================================
+function ladeLokal() {
+  try {
+    const raw = localStorage.getItem(LOCAL_KEY);
+    return raw ? JSON.parse(raw) : { voelker: [], standorte: [] };
+  } catch {
+    return { voelker: [], standorte: [] };
+  }
+}
+function speichereLokal(daten) {
+  try {
+    localStorage.setItem(LOCAL_KEY, JSON.stringify(daten));
+    return true;
+  } catch (e) {
+    console.error("Lokaler Speicher voll oder Fehler:", e);
+    return false;
+  }
+}
+
+// ============================================================
+// Google Drive Sync
+// ============================================================
+let tokenClient = null;
+let accessToken = null;
+
+function initGoogle(onToken) {
+  if (!window.google || tokenClient) return;
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: CFG.GOOGLE_CLIENT_ID,
+    scope: DRIVE_SCOPE,
+    callback: (resp) => {
+      if (resp && resp.access_token) {
+        accessToken = resp.access_token;
+        onToken(resp.access_token);
+      }
+    }
+  });
+}
+function googleAnmelden() {
+  if (tokenClient) tokenClient.requestAccessToken({ prompt: "consent" });
+}
+function googleStillErneuern() {
+  if (tokenClient) tokenClient.requestAccessToken({ prompt: "" });
+}
+
+async function driveFindeDatei() {
+  const cachedId = localStorage.getItem(DRIVE_FILEID_KEY);
+  if (cachedId) return cachedId;
+  const url = `https://www.googleapis.com/drive/v3/files?q=name%3D%27${DRIVE_DATEINAME}%27+and+trashed%3Dfalse&spaces=drive&fields=files(id,name)`;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+  const data = await res.json();
+  if (data.files && data.files.length > 0) {
+    localStorage.setItem(DRIVE_FILEID_KEY, data.files[0].id);
+    return data.files[0].id;
+  }
+  return null;
+}
+
+async function drivePull() {
+  const id = await driveFindeDatei();
+  if (!id) return null;
+  const res = await fetch(`https://www.googleapis.com/drive/v3/files/${id}?alt=media`, {
+    headers: { Authorization: `Bearer ${accessToken}` }
+  });
+  if (!res.ok) throw new Error("Drive-Abruf fehlgeschlagen");
+  return await res.json();
+}
+
+async function drivePush(daten) {
+  let id = await driveFindeDatei();
+  const json = JSON.stringify(daten);
+
+  if (!id) {
+    const boundary = "imkerapp" + Date.now();
+    const metadata = { name: DRIVE_DATEINAME, mimeType: "application/json" };
+    const body =
+      `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n` +
+      `--${boundary}\r\nContent-Type: application/json\r\n\r\n${json}\r\n--${boundary}--`;
+    const res = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": `multipart/related; boundary=${boundary}` },
+      body
+    });
+    if (!res.ok) throw new Error("Drive-Erstellung fehlgeschlagen");
+    const data = await res.json();
+    localStorage.setItem(DRIVE_FILEID_KEY, data.id);
+    return;
+  }
+
+  const res = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${id}?uploadType=media`, {
+    method: "PATCH",
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    body: json
+  });
+  if (!res.ok) {
+    if (res.status === 401) throw { code: 401 };
+    throw new Error("Drive-Update fehlgeschlagen");
+  }
+}
+
+// ============================================================
+// Bild komprimieren
+// ============================================================
+function komprimiereBild(file, maxBreite = 900, qualitaet = 0.68) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, maxBreite / img.width);
+        const canvas = document.createElement("canvas");
+        canvas.width = img.width * scale;
+        canvas.height = img.height * scale;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL("image/jpeg", qualitaet));
+      };
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+// ============================================================
+// Wetter (Open-Meteo, kein Key nötig)
+// ============================================================
+function useWetter() {
+  const [wetter, setWetter] = useState(null);
+  const [status, setStatus] = useState("laden");
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`https://api.open-meteo.com/v1/forecast?latitude=${MALS_LAT}&longitude=${MALS_LON}&current=temperature_2m,precipitation,wind_speed_10m,weather_code&daily=temperature_2m_max,temperature_2m_min&timezone=Europe/Berlin`)
+      .then((r) => r.json())
+      .then((d) => { if (!cancelled) { setWetter(d); setStatus("ok"); } })
+      .catch(() => { if (!cancelled) setStatus("fehler"); });
+    return () => { cancelled = true; };
+  }, []);
+  return { wetter, status };
+}
+function wetterEmoji(code) {
+  if (code === 0) return "☀️";
+  if ([1, 2, 3].includes(code)) return "⛅";
+  if ([45, 48].includes(code)) return "🌫️";
+  if ([51, 53, 55, 61, 63, 65, 80, 81, 82].includes(code)) return "🌧️";
+  if ([71, 73, 75].includes(code)) return "🌨️";
+  if (code === 95) return "⛈️";
+  return "☁️";
+}
+function wetterText(code) {
+  const map = { 0: "Klar", 1: "Überwiegend klar", 2: "Teilweise bewölkt", 3: "Bedeckt", 45: "Nebel", 48: "Reifnebel",
+    51: "Leichter Nieselregen", 53: "Nieselregen", 55: "Starker Nieselregen", 61: "Leichter Regen", 63: "Regen",
+    65: "Starker Regen", 71: "Leichter Schneefall", 73: "Schneefall", 75: "Starker Schneefall",
+    80: "Regenschauer", 81: "Regenschauer", 82: "Starke Regenschauer", 95: "Gewitter" };
+  return map[code] || "—";
+}
+
+// ============================================================
+// Diktat-Parsing
+// ============================================================
+function parseTranskript(text) {
+  const t = text.toLowerCase();
+  const felder = {};
+  let m = t.match(/(\d+)\s*(brutwaben|brutnest(?:waben)?|waben brut)/);
+  if (m) felder.brutstaerke = parseInt(m[1], 10);
+  m = t.match(/(\d+)\s*zargen/);
+  if (m) felder.zargen = parseInt(m[1], 10);
+  if (/futter\s*(gering|wenig|knapp)/.test(t)) felder.futtervorrat = "gering";
+  else if (/futter\s*(mittel)/.test(t)) felder.futtervorrat = "mittel";
+  else if (/futter\s*(gut)/.test(t)) felder.futtervorrat = "gut";
+  else if (/futter\s*(voll|reichlich)/.test(t)) felder.futtervorrat = "voll";
+  if (/königin\s*(nicht\s*)?gesehen/.test(t)) felder.koeniginGesehen = !/nicht\s*gesehen/.test(t);
+  else if (/königin\s*vorhanden/.test(t)) felder.koeniginGesehen = true;
+  if (/(schwarmstimmung|weiselzellen)\s*(ja|vorhanden|gefunden)/.test(t) || (/weiselzellen/.test(t) && !/keine weiselzellen/.test(t))) felder.schwarmstimmung = true;
+  else if (/(keine\s*(schwarmstimmung|weiselzellen)|schwarmstimmung\s*nein)/.test(t)) felder.schwarmstimmung = false;
+  m = t.match(/varroa[^\d]*(\d+)/);
+  if (m) felder.varroaBefall = parseInt(m[1], 10);
+  m = t.match(/(\d+([.,]\d+)?)\s*kg\s*(honig)?/);
+  if (m) felder.honigernteKg = parseFloat(m[1].replace(",", "."));
+  if (/gesundheit(szustand)?\s*gut|volk\s*gesund/.test(t)) felder.gesundheit = "gut";
+  else if (/auffällig/.test(t)) felder.gesundheit = "auffällig";
+  else if (/kritisch|krank/.test(t)) felder.gesundheit = "kritisch";
+  return { felder, rohtext: text };
+}
+function feldLabel(k) {
+  const map = { brutstaerke: "Brutwaben", zargen: "Zargen", futtervorrat: "Futter", koeniginGesehen: "Königin gesehen",
+    schwarmstimmung: "Schwarmstimmung", varroaBefall: "Varroa", honigernteKg: "Honig (kg)", gesundheit: "Gesundheit" };
+  return map[k] || k;
+}
+function useSpeechRecognition(onResult) {
+  const [listening, setListening] = useState(false);
+  const [supported, setSupported] = useState(true);
+  const ref = useRef(null);
+  useEffect(() => {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { setSupported(false); return; }
+    const r = new SR();
+    r.lang = "de-DE"; r.continuous = true; r.interimResults = false;
+    r.onresult = (e) => {
+      let text = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) if (e.results[i].isFinal) text += e.results[i][0].transcript + " ";
+      if (text.trim()) onResult(text.trim());
+    };
+    r.onerror = () => setListening(false);
+    r.onend = () => setListening(false);
+    ref.current = r;
+  }, [onResult]);
+  const start = () => { try { ref.current.start(); setListening(true); } catch { setListening(false); } };
+  const stop = () => { ref.current && ref.current.stop(); setListening(false); };
+  return { listening, supported, start, stop };
+}
+
+// ============================================================
+// KI-Aufrufe über den eigenen Cloudflare-Worker
+// ============================================================
+async function rufeWorkerAuf(body) {
+  const res = await fetch(CFG.WORKER_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-App-Secret": CFG.APP_SECRET },
+    body: JSON.stringify(body)
+  });
+  if (!res.ok) throw new Error("KI-Anfrage fehlgeschlagen (" + res.status + ")");
+  const data = await res.json();
+  return (data.content || []).filter((b) => b.type === "text").map((b) => b.text).join("\n");
+}
+function getJahreszeit() {
+  const m = new Date().getMonth() + 1;
+  if ([12, 1, 2].includes(m)) return "Winter";
+  if ([3, 4, 5].includes(m)) return "Frühjahr";
+  if ([6, 7, 8].includes(m)) return "Sommer";
+  return "Herbst";
+}
+async function holeKiTipp({ volk, standortName, letzterEintrag, wetter }) {
+  const kontext = `Du bist ein erfahrener Berufsimker und gibst einem Hobbyimker in Mals im Vinschgau (Südtirol, ca. 1050m Höhe, Bergklima) konkrete, kurze Praxistipps zur Völkerführung.
+
+Volk: ${volk.name || "Unbenannt"} (Stand: ${standortName || "unbekannt"})
+Jahreszeit: ${getJahreszeit()}
+Letzte Kontrolle: ${letzterEintrag ? JSON.stringify(letzterEintrag) : "noch keine Daten vorhanden"}
+Aktuelles Wetter: ${wetter ? `${wetter.current?.temperature_2m}°C, Niederschlag ${wetter.current?.precipitation}mm, Wind ${wetter.current?.wind_speed_10m}km/h` : "nicht verfügbar"}
+
+Gib maximal 3 knappe, konkrete Handlungsempfehlungen (Stichpunkte, kein Fließtext, kein Vorspann). Antworte ausschließlich auf Deutsch.`;
+  return rufeWorkerAuf({ messages: [{ role: "user", content: kontext }] });
+}
+async function holeFotoAnalyse({ dataUrl, volkName, notiz }) {
+  const match = dataUrl.match(/^data:(image\/\w+);base64,(.+)$/);
+  if (!match) throw new Error("Ungültiges Bildformat");
+  const promptText = `Du bist ein erfahrener Berufsimker. Analysiere dieses Foto aus dem Bienenstand "${volkName || "unbekannt"}"${notiz ? ` (Notiz: "${notiz}")` : ""}.
+Beschreibe knapp (max. 4 Stichpunkte): 1) was zu erkennen ist, 2) Auffälligkeiten falls erkennbar, 3) eine Handlungsempfehlung falls angebracht.
+Falls nichts Eindeutiges erkennbar ist, sag das ehrlich. Antworte ausschließlich auf Deutsch, ohne Vorspann.`;
+  return rufeWorkerAuf({
+    messages: [{ role: "user", content: [
+      { type: "image", source: { type: "base64", media_type: match[1], data: match[2] } },
+      { type: "text", text: promptText }
+    ]}]
+  });
+}
+
+// ============================================================
+// Mini-SVG-Liniengrafik (ersetzt recharts)
+// ============================================================
+function MiniLinienGrafik({ history }) {
+  const data = history.slice().sort((a, b) => new Date(a.datum) - new Date(b.datum));
+  if (data.length === 0) return <div className="grafik-leer">Noch keine Kontrollen erfasst — Grafik erscheint nach dem ersten Eintrag.</div>;
+
+  const w = 300, h = 160, padL = 30, padB = 22, padT = 10, padR = 10;
+  const werte = (key) => data.map((d) => d[key]).filter((v) => v !== undefined && v !== null);
+  const alleWerte = [...werte("brutstaerke"), ...werte("varroaBefall")];
+  const maxY = Math.max(1, ...alleWerte);
+  const stepX = data.length > 1 ? (w - padL - padR) / (data.length - 1) : 0;
+
+  const pfad = (key) => {
+    let d = "", begonnen = false;
+    data.forEach((pt, i) => {
+      const v = pt[key];
+      const x = padL + i * stepX;
+      if (v === undefined || v === null) { begonnen = false; return; }
+      const y = padT + (1 - v / maxY) * (h - padT - padB);
+      d += (begonnen ? " L " : " M ") + x + " " + y;
+      begonnen = true;
+    });
+    return d;
+  };
+
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} style={{ width: "100%", height: 200 }}>
+      {[0, 0.5, 1].map((f, i) => (
+        <line key={i} x1={padL} x2={w - padR} y1={padT + f * (h - padT - padB)} y2={padT + f * (h - padT - padB)} stroke="#E4D9C3" strokeWidth="1" />
+      ))}
+      <path d={pfad("brutstaerke")} fill="none" stroke="#C97A2B" strokeWidth="2.5" />
+      <path d={pfad("varroaBefall")} fill="none" stroke="#8B3A3A" strokeWidth="2" />
+      {data.map((pt, i) => {
+        const x = padL + i * stepX;
+        return (
+          <text key={i} x={x} y={h - 4} fontSize="8" textAnchor="middle" fill="#2B2118" opacity="0.6">
+            {new Date(pt.datum).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })}
+          </text>
+        );
+      })}
+      <text x={padL} y={12} fontSize="9" fill="#C97A2B" fontWeight="700">● Brutwaben</text>
+      <text x={padL + 70} y={12} fontSize="9" fill="#8B3A3A" fontWeight="700">● Varroa</text>
+    </svg>
+  );
+}
+
+// ============================================================
+// UI-Bausteine
+// ============================================================
+function SyncLeiste({ status, angemeldet, onAnmelden, onSyncJetzt }) {
+  return (
+    <div className="sync-leiste">
+      <div className="sync-status">
+        <span className={`sync-dot ${status === "ok" ? "ok" : status === "fehler" ? "fehler" : status === "laeuft" ? "laeuft" : ""}`}></span>
+        {angemeldet
+          ? (status === "laeuft" ? "Synchronisiere…" : status === "fehler" ? "Sync-Fehler" : "Mit Google Drive verbunden")
+          : "Nicht mit Google Drive verbunden"}
+      </div>
+      {angemeldet
+        ? <button className="btn-secondary klein" onClick={onSyncJetzt}>Jetzt synchronisieren</button>
+        : <button className="google-btn" onClick={onAnmelden}>Mit Google verbinden</button>}
+    </div>
+  );
+}
+
+function WetterWidget() {
+  const { wetter, status } = useWetter();
+  if (status === "laden") return <div className="wetter-card"><span className="spin">⏳</span><span>Wetter wird geladen…</span></div>;
+  if (status === "fehler" || !wetter) return <div className="wetter-card"><span>Wetterdaten aktuell nicht verfügbar.</span></div>;
+  return (
+    <div className="wetter-card">
+      <div className="wetter-haupt">
+        <span className="wetter-icon">{wetterEmoji(wetter.current?.weather_code)}</span>
+        <div>
+          <div className="wetter-temp">{Math.round(wetter.current?.temperature_2m)}°C</div>
+          <div className="wetter-text">{wetterText(wetter.current?.weather_code)} · Vinschgau/Mals</div>
+        </div>
+      </div>
+      <div className="wetter-details">
+        <span>💧 {wetter.current?.precipitation ?? 0} mm</span>
+        <span>💨 {Math.round(wetter.current?.wind_speed_10m ?? 0)} km/h</span>
+        <span>🌡️ {Math.round(wetter.daily?.temperature_2m_min?.[0])}° / {Math.round(wetter.daily?.temperature_2m_max?.[0])}°</span>
+      </div>
+    </div>
+  );
+}
+
+function StandortDialog({ standorte, onAdd, onDelete, onClose }) {
+  const [name, setName] = useState("");
+  const [beschreibung, setBeschreibung] = useState("");
+  const hinzufuegen = () => { if (!name.trim()) return; onAdd({ name: name.trim(), beschreibung: beschreibung.trim() }); setName(""); setBeschreibung(""); };
+  return (
+    <div className="dialog-overlay">
+      <div className="dialog">
+        <div className="dialog-header"><h2>Bienenstände</h2><button className="icon-btn" onClick={onClose}>✕</button></div>
+        <div className="standort-liste">
+          {standorte.length === 0 && <div className="hinweis-klein">Noch keine Stände angelegt.</div>}
+          {standorte.map((s) => (
+            <div className="standort-eintrag" key={s.id}>
+              📍<div className="standort-eintrag-info"><div className="standort-eintrag-name">{s.name}</div>{s.beschreibung && <div className="standort-eintrag-beschr">{s.beschreibung}</div>}</div>
+              <button className="icon-btn danger" onClick={() => onDelete(s.id)}>🗑️</button>
+            </div>
+          ))}
+        </div>
+        <div className="standort-neu">
+          <label>Neuer Stand<input value={name} onChange={(e) => setName(e.target.value)} placeholder="z. B. Garten Puniweg" /></label>
+          <label>Beschreibung (optional)<input value={beschreibung} onChange={(e) => setBeschreibung(e.target.value)} placeholder="z. B. Südhang, windgeschützt" /></label>
+          <button className="btn-primary" disabled={!name.trim()} onClick={hinzufuegen}>➕ Stand hinzufügen</button>
+        </div>
+        <div className="dialog-actions"><button className="btn-secondary" onClick={onClose}>Fertig</button></div>
+      </div>
+    </div>
+  );
+}
+
+function VolkListe({ voelker, standorte, onSelect, onNeu, onStandorte }) {
+  const [filter, setFilter] = useState("alle");
+  const standortName = (id) => standorte.find((s) => s.id === id)?.name;
+  const gefiltert = filter === "alle" ? voelker : voelker.filter((v) => v.standortId === filter);
+  return (
+    <div>
+      <div className="liste-header">
+        <h1>Meine Völker</h1>
+        <div className="liste-header-btns">
+          <button className="btn-secondary klein" onClick={onStandorte}>⚙️ Stände</button>
+          <button className="btn-primary" onClick={onNeu}>➕ Neues Volk</button>
+        </div>
+      </div>
+      <WetterWidget />
+      {standorte.length > 0 && (
+        <div className="filter-chips">
+          <button className={`filter-chip ${filter === "alle" ? "aktiv" : ""}`} onClick={() => setFilter("alle")}>Alle Stände</button>
+          {standorte.map((s) => (
+            <button key={s.id} className={`filter-chip ${filter === s.id ? "aktiv" : ""}`} onClick={() => setFilter(s.id)}>📍 {s.name}</button>
+          ))}
+        </div>
+      )}
+      {voelker.length === 0 && <div className="leer"><p>Noch keine Völker angelegt.</p><button className="btn-primary" onClick={onNeu}>➕ Erstes Volk anlegen</button></div>}
+      <div className="volk-grid">
+        {gefiltert.map((v) => (
+          <button className="volk-kachel" key={v.id} onClick={() => onSelect(v.id)}>
+            <div className="wabe-icon"></div>
+            <div>
+              <div className="volk-kachel-name">{v.name}</div>
+              <div className="volk-kachel-standort">📍 {standortName(v.standortId) || "kein Stand"}</div>
+            </div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function NeuesVolkDialog({ standorte, onSave, onCancel, onAddStandort }) {
+  const [name, setName] = useState("");
+  const [standortId, setStandortId] = useState(standorte[0]?.id || "");
+  const [koeniginJahr, setKoeniginJahr] = useState(String(new Date().getFullYear()));
+  const [beute, setBeute] = useState("");
+  const [zeigeNeuerStandort, setZeigeNeuerStandort] = useState(false);
+  const [neuerStandortName, setNeuerStandortName] = useState("");
+
+  const standortHinzufuegen = () => {
+    if (!neuerStandortName.trim()) return;
+    const neu = onAddStandort({ name: neuerStandortName.trim(), beschreibung: "" });
+    setStandortId(neu.id); setNeuerStandortName(""); setZeigeNeuerStandort(false);
+  };
+
+  return (
+    <div className="dialog-overlay">
+      <div className="dialog">
+        <div className="dialog-header"><h2>Neues Volk</h2><button className="icon-btn" onClick={onCancel}>✕</button></div>
+        <label>Name / Nummer<input value={name} onChange={(e) => setName(e.target.value)} placeholder="z. B. Volk 1" autoFocus /></label>
+        <label>Stand
+          <select value={standortId} onChange={(e) => e.target.value === "__neu__" ? setZeigeNeuerStandort(true) : setStandortId(e.target.value)}>
+            <option value="">— kein Stand —</option>
+            {standorte.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            <option value="__neu__">+ Neuer Stand…</option>
+          </select>
+        </label>
+        {zeigeNeuerStandort && (
+          <div className="inline-neu">
+            <input value={neuerStandortName} onChange={(e) => setNeuerStandortName(e.target.value)} placeholder="Name des neuen Standes" autoFocus />
+            <button className="btn-primary klein" disabled={!neuerStandortName.trim()} onClick={standortHinzufuegen}>Anlegen</button>
+          </div>
+        )}
+        <label>Königin – Jahrgang<input value={koeniginJahr} onChange={(e) => setKoeniginJahr(e.target.value)} /></label>
+        <label>Beutentyp<input value={beute} onChange={(e) => setBeute(e.target.value)} placeholder="z. B. Zander, Dadant" /></label>
+        <div className="dialog-actions">
+          <button className="btn-secondary" onClick={onCancel}>Abbrechen</button>
+          <button className="btn-primary" disabled={!name.trim()} onClick={() => onSave({ name: name.trim(), standortId, koeniginJahr, beute })}>Anlegen</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DiktatBox({ onFelder }) {
+  const [transkript, setTranskript] = useState("");
+  const [manuellerText, setManuellerText] = useState("");
+  const [erkannt, setErkannt] = useState(null);
+  const handleResult = useCallback((text) => setTranskript((p) => (p ? p + " " + text : text)), []);
+  const { listening, supported, start, stop } = useSpeechRecognition(handleResult);
+  const verarbeiten = (text) => setErkannt(parseTranskript(text));
+  useEffect(() => { if (transkript) verarbeiten(transkript); }, [transkript]);
+  const uebernehmen = () => { if (erkannt) { onFelder(erkannt.felder, erkannt.rohtext); setTranskript(""); setManuellerText(""); setErkannt(null); } };
+  return (
+    <div className="diktat-box">
+      <div className="diktat-header">
+        <span className="diktat-titel">Diktierfunktion</span>
+        {supported
+          ? <button className={`mic-btn ${listening ? "aktiv" : ""}`} onClick={listening ? stop : start}>{listening ? "⏹ Stoppen" : "🎤 Aufnahme starten"}</button>
+          : <span className="hinweis-klein">Spracherkennung nicht verfügbar — Text unten eingeben.</span>}
+      </div>
+      {!supported && (
+        <textarea className="diktat-textarea" placeholder="z. B. 8 Brutwaben, Futter gut, Königin gesehen, Varroa 2"
+          value={manuellerText} onChange={(e) => setManuellerText(e.target.value)} onBlur={() => manuellerText && verarbeiten(manuellerText)} />
+      )}
+      {transkript && <div className="transkript">{transkript}</div>}
+      {erkannt && Object.keys(erkannt.felder).length > 0 && (
+        <div className="erkannt-box">
+          <div className="erkannt-titel">Erkannte Werte:</div>
+          <div className="erkannt-chips">{Object.entries(erkannt.felder).map(([k, v]) => <span className="chip" key={k}>{feldLabel(k)}: {String(v)}</span>)}</div>
+          <button className="btn-primary klein" onClick={uebernehmen}>In Stockkarte übernehmen</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function NeuerEintragForm({ initial, onSave, onCancel }) {
+  const [f, setF] = useState({ datum: new Date().toISOString().slice(0, 10), brutstaerke: "", zargen: "", futtervorrat: "",
+    koeniginGesehen: null, schwarmstimmung: null, varroaBefall: "", honigernteKg: "", gesundheit: "", notizen: "", ...initial });
+  useEffect(() => { if (initial) setF((p) => ({ ...p, ...initial })); }, [initial]);
+  const set = (k, v) => setF((p) => ({ ...p, [k]: v }));
+  return (
+    <div className="eintrag-form">
+      <div className="form-zeile">
+        <label>Datum<input type="date" value={f.datum} onChange={(e) => set("datum", e.target.value)} /></label>
+        <label>Brutwaben<input type="number" min="0" value={f.brutstaerke} onChange={(e) => set("brutstaerke", e.target.value)} /></label>
+        <label>Zargen<input type="number" min="0" value={f.zargen} onChange={(e) => set("zargen", e.target.value)} /></label>
+      </div>
+      <div className="form-zeile">
+        <label>Futtervorrat<select value={f.futtervorrat} onChange={(e) => set("futtervorrat", e.target.value)}><option value="">—</option>{FUTTER_OPTIONEN.map((o) => <option key={o} value={o}>{o}</option>)}</select></label>
+        <label>Gesundheit<select value={f.gesundheit} onChange={(e) => set("gesundheit", e.target.value)}><option value="">—</option>{GESUNDHEIT_OPTIONEN.map((o) => <option key={o} value={o}>{o}</option>)}</select></label>
+        <label>Varroa (Totenfall)<input type="number" min="0" value={f.varroaBefall} onChange={(e) => set("varroaBefall", e.target.value)} /></label>
+      </div>
+      <div className="form-zeile">
+        <label className="checkbox-label"><input type="checkbox" checked={!!f.koeniginGesehen} onChange={(e) => set("koeniginGesehen", e.target.checked)} />Königin gesehen</label>
+        <label className="checkbox-label"><input type="checkbox" checked={!!f.schwarmstimmung} onChange={(e) => set("schwarmstimmung", e.target.checked)} />Schwarmstimmung</label>
+        <label>Honigernte (kg)<input type="number" min="0" step="0.5" value={f.honigernteKg} onChange={(e) => set("honigernteKg", e.target.value)} /></label>
+      </div>
+      <label>Notizen<textarea value={f.notizen} onChange={(e) => set("notizen", e.target.value)} rows={2}></textarea></label>
+      <div className="dialog-actions">
+        <button className="btn-secondary" onClick={onCancel}>Verwerfen</button>
+        <button className="btn-primary" onClick={() => onSave(f)}>Kontrolle speichern</button>
+      </div>
+    </div>
+  );
+}
+
+function KiTippBox({ volk, standortName, letzterEintrag, wetter }) {
+  const [tipp, setTipp] = useState(null);
+  const [laden, setLaden] = useState(false);
+  const [fehler, setFehler] = useState(null);
+  const holen = async () => {
+    setLaden(true); setFehler(null);
+    try { setTipp(await holeKiTipp({ volk, standortName, letzterEintrag, wetter })); }
+    catch (e) { setFehler("Tipp konnte nicht geladen werden. Ist der Worker richtig konfiguriert?"); }
+    finally { setLaden(false); }
+  };
+  return (
+    <div className="ki-box">
+      <div className="ki-header">
+        <span className="ki-titel">✨ Tipp vom Profiimker</span>
+        <button className="btn-secondary klein" onClick={holen} disabled={laden}>{laden ? "⏳" : "Tipp abrufen"}</button>
+      </div>
+      {fehler && <div className="ki-fehler">{fehler}</div>}
+      {tipp && <div className="ki-text">{tipp}</div>}
+    </div>
+  );
+}
+
+function FotoModal({ foto, volkName, onClose, onDelete, onUpdateMeta }) {
+  const [notiz, setNotiz] = useState(foto.notiz || "");
+  const [analyse, setAnalyse] = useState(foto.analyse || "");
+  const [analysiere, setAnalysiere] = useState(false);
+  const [fehler, setFehler] = useState(null);
+  const notizSpeichern = () => { if (notiz !== foto.notiz) onUpdateMeta(foto.id, { notiz }); };
+  const analysieren = async () => {
+    setAnalysiere(true); setFehler(null);
+    try { const text = await holeFotoAnalyse({ dataUrl: foto.dataUrl, volkName, notiz }); setAnalyse(text); onUpdateMeta(foto.id, { analyse: text }); }
+    catch (e) { setFehler("Analyse konnte nicht erstellt werden. Ist der Worker richtig konfiguriert?"); }
+    finally { setAnalysiere(false); }
+  };
+  return (
+    <div className="dialog-overlay">
+      <div className="dialog foto-dialog">
+        <div className="dialog-header"><h2>Foto</h2><button className="icon-btn" onClick={onClose}>✕</button></div>
+        <div className="foto-gross-wrap"><img className="foto-gross" src={foto.dataUrl} alt="Stockkarten-Foto" /></div>
+        <div className="foto-datum">{new Date(foto.datum).toLocaleDateString("de-DE")}</div>
+        <label>Notiz<input value={notiz} onChange={(e) => setNotiz(e.target.value)} onBlur={notizSpeichern} placeholder="z. B. Wabe 4, mittlere Zarge" /></label>
+        <div className="foto-analyse-block">
+          <button className="btn-secondary klein" onClick={analysieren} disabled={analysiere}>{analysiere ? "⏳ Analysiere…" : "✨ Foto analysieren"}</button>
+          {fehler && <div className="ki-fehler">{fehler}</div>}
+          {analyse && <div className="foto-analyse-text">{analyse}<div className="foto-analyse-hinweis">Automatische Einschätzung — ersetzt keine fachliche Beurteilung vor Ort.</div></div>}
+        </div>
+        <div className="dialog-actions">
+          <button className="btn-secondary danger-text" onClick={() => onDelete(foto.id)}>🗑️ Foto löschen</button>
+          <button className="btn-primary" onClick={onClose}>Fertig</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FotoSection({ volk, onAddFoto, onDeleteFoto, onUpdateFotoMeta }) {
+  const fileInputRef = useRef(null);
+  const [ausgewaehlt, setAusgewaehlt] = useState(null);
+  const [hochladen, setHochladen] = useState(false);
+  const fotos = volk.fotos || [];
+  const ausgewaehltesFoto = fotos.find((f) => f.id === ausgewaehlt);
+  const dateiAusgewaehlt = async (e) => {
+    const file = e.target.files?.[0]; e.target.value = "";
+    if (!file) return;
+    setHochladen(true);
+    try {
+      const dataUrl = await komprimiereBild(file);
+      await onAddFoto({ id: `foto_${Date.now()}`, datum: new Date().toISOString(), notiz: "", analyse: "", dataUrl });
+    } finally { setHochladen(false); }
+  };
+  return (
+    <div className="karte">
+      <div className="karte-header"><span>Fotos</span></div>
+      <div className="foto-grid">
+        {fotos.map((f) => (
+          <button className="foto-thumb" key={f.id} onClick={() => setAusgewaehlt(f.id)}>
+            <img src={f.dataUrl} alt="Stockkarten-Foto" />
+            {f.analyse && <span className="foto-thumb-badge">✨</span>}
+          </button>
+        ))}
+        <button className="foto-add" onClick={() => fileInputRef.current?.click()} disabled={hochladen}>{hochladen ? "⏳" : "📷+"}</button>
+        <input ref={fileInputRef} type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={dateiAusgewaehlt} />
+      </div>
+      {fotos.length === 0 && <div className="grafik-leer">Noch keine Fotos hinterlegt.</div>}
+      {ausgewaehltesFoto && (
+        <FotoModal foto={ausgewaehltesFoto} volkName={volk.name} onClose={() => setAusgewaehlt(null)}
+          onDelete={(id) => { onDeleteFoto(id); setAusgewaehlt(null); }} onUpdateMeta={onUpdateFotoMeta} />
+      )}
+    </div>
+  );
+}
+
+function Stockkarte({ volk, standorte, onZurueck, onUpdate, onDelete }) {
+  const [zeigeForm, setZeigeForm] = useState(false);
+  const [vorausgefuellt, setVorausgefuellt] = useState(null);
+  const { wetter } = useWetter();
+  const history = volk.history || [];
+  const letzterEintrag = history.length ? history[history.length - 1] : null;
+  const standortName = standorte.find((s) => s.id === volk.standortId)?.name;
+
+  const eintragSpeichern = (eintrag) => {
+    const neu = { ...eintrag,
+      brutstaerke: eintrag.brutstaerke === "" ? undefined : Number(eintrag.brutstaerke),
+      zargen: eintrag.zargen === "" ? undefined : Number(eintrag.zargen),
+      varroaBefall: eintrag.varroaBefall === "" ? undefined : Number(eintrag.varroaBefall),
+      honigernteKg: eintrag.honigernteKg === "" ? undefined : Number(eintrag.honigernteKg) };
+    onUpdate({ ...volk, history: [...history, neu] });
+    setZeigeForm(false); setVorausgefuellt(null);
+  };
+  const felderAusDiktat = (felder, rohtext) => { setVorausgefuellt({ ...felder, notizen: rohtext }); setZeigeForm(true); };
+  const standortAendern = (e) => onUpdate({ ...volk, standortId: e.target.value });
+  const fotoHinzufuegen = (meta) => onUpdate({ ...volk, fotos: [...(volk.fotos || []), meta] });
+  const fotoLoeschen = (id) => onUpdate({ ...volk, fotos: (volk.fotos || []).filter((f) => f.id !== id) });
+  const fotoMetaAktualisieren = (id, patch) => onUpdate({ ...volk, fotos: (volk.fotos || []).map((f) => (f.id === id ? { ...f, ...patch } : f)) });
+
+  return (
+    <div>
+      <div className="sk-header">
+        <button className="icon-btn" onClick={onZurueck}>←</button>
+        <div className="sk-titel"><h1>{volk.name}</h1><span className="sk-standort">Königin {volk.koeniginJahr}{volk.beute ? ` · ${volk.beute}` : ""}</span></div>
+        <button className="icon-btn danger" onClick={() => onDelete(volk.id)}>🗑️</button>
+      </div>
+      <div className="standort-auswahl">📍
+        <select value={volk.standortId || ""} onChange={standortAendern}>
+          <option value="">— kein Stand —</option>
+          {standorte.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+        </select>
+      </div>
+      <DiktatBox onFelder={felderAusDiktat} />
+      <div className="karte"><div className="karte-header"><span>Entwicklung</span></div><MiniLinienGrafik history={history} /></div>
+      <KiTippBox volk={volk} standortName={standortName} letzterEintrag={letzterEintrag} wetter={wetter} />
+      <FotoSection volk={volk} onAddFoto={fotoHinzufuegen} onDeleteFoto={fotoLoeschen} onUpdateFotoMeta={fotoMetaAktualisieren} />
+      {zeigeForm ? (
+        <div className="karte"><div className="karte-header"><span>Neue Kontrolle</span></div>
+          <NeuerEintragForm initial={vorausgefuellt} onSave={eintragSpeichern} onCancel={() => { setZeigeForm(false); setVorausgefuellt(null); }} />
+        </div>
+      ) : <button className="btn-primary voll" onClick={() => setZeigeForm(true)}>➕ Kontrolle manuell erfassen</button>}
+      <div className="karte">
+        <div className="karte-header"><span>Verlauf</span></div>
+        {history.length === 0 && <div className="grafik-leer">Noch keine Einträge.</div>}
+        <div className="verlauf-liste">
+          {history.slice().reverse().map((h, i) => (
+            <div className="verlauf-eintrag" key={i}>
+              <div className="verlauf-datum">{new Date(h.datum).toLocaleDateString("de-DE")}</div>
+              <div className="verlauf-details">
+                {h.brutstaerke !== undefined && <span>Brut: {h.brutstaerke}</span>}
+                {h.futtervorrat && <span>Futter: {h.futtervorrat}</span>}
+                {h.gesundheit && <span>Gesundheit: {h.gesundheit}</span>}
+                {h.varroaBefall !== undefined && <span>Varroa: {h.varroaBefall}</span>}
+                {h.koeniginGesehen && <span>Königin gesehen</span>}
+                {h.schwarmstimmung && <span className="warn">Schwarmstimmung</span>}
+                {h.honigernteKg !== undefined && <span>Honig: {h.honigernteKg}kg</span>}
+              </div>
+              {h.notizen && <div className="verlauf-notiz">{h.notizen}</div>}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// Haupt-App
+// ============================================================
+function ImkerApp() {
+  const [daten, setDaten] = useState(() => ladeLokal());
+  const [ausgewaehlt, setAusgewaehlt] = useState(null);
+  const [zeigeNeu, setZeigeNeu] = useState(false);
+  const [zeigeStandorte, setZeigeStandorte] = useState(false);
+  const [angemeldet, setAngemeldet] = useState(false);
+  const [syncStatus, setSyncStatus] = useState("idle");
+  const [fehler, setFehler] = useState(null);
+  const syncTimer = useRef(null);
+
+  useEffect(() => {
+    initGoogle(async (token) => {
+      setAngemeldet(true);
+      setSyncStatus("laeuft");
+      try {
+        const remote = await drivePull();
+        if (remote) setDaten(remote);
+        setSyncStatus("ok");
+      } catch (e) {
+        setSyncStatus("fehler");
+      }
+    });
+  }, []);
+
+  // Lokale Speicherung bei jeder Änderung
+  useEffect(() => {
+    const ok = speichereLokal(daten);
+    if (!ok) setFehler("Lokaler Speicher ist voll — evtl. alte Fotos löschen.");
+  }, [daten]);
+
+  // Debounced Drive-Sync bei Änderung
+  useEffect(() => {
+    if (!angemeldet) return;
+    if (syncTimer.current) clearTimeout(syncTimer.current);
+    syncTimer.current = setTimeout(async () => {
+      setSyncStatus("laeuft");
+      try {
+        await drivePush(daten);
+        setSyncStatus("ok");
+      } catch (e) {
+        if (e && e.code === 401) {
+          googleStillErneuern();
+        }
+        setSyncStatus("fehler");
+      }
+    }, 2500);
+    return () => clearTimeout(syncTimer.current);
+  }, [daten, angemeldet]);
+
+  const syncJetzt = async () => {
+    setSyncStatus("laeuft");
+    try { await drivePush(daten); setSyncStatus("ok"); }
+    catch { setSyncStatus("fehler"); }
+  };
+
+  const volkAktualisieren = (updated) => setDaten((d) => ({ ...d, voelker: d.voelker.map((v) => (v.id === updated.id ? updated : v)) }));
+  const volkLoeschen = (id) => { setDaten((d) => ({ ...d, voelker: d.voelker.filter((v) => v.id !== id) })); setAusgewaehlt(null); };
+  const neuesVolkAnlegen = (info) => {
+    const volk = { id: `v_${Date.now()}`, ...info, history: [], fotos: [] };
+    setDaten((d) => ({ ...d, voelker: [...d.voelker, volk] }));
+    setZeigeNeu(false); setAusgewaehlt(volk.id);
+  };
+  const standortHinzufuegen = (info) => {
+    const neu = { id: `s_${Date.now()}`, ...info };
+    setDaten((d) => ({ ...d, standorte: [...d.standorte, neu] }));
+    return neu;
+  };
+  const standortLoeschen = (id) => setDaten((d) => ({ ...d, standorte: d.standorte.filter((s) => s.id !== id) }));
+
+  const aktuellesVolk = daten.voelker.find((v) => v.id === ausgewaehlt);
+
+  return (
+    <div className="app-root">
+      <SyncLeiste status={syncStatus} angemeldet={angemeldet} onAnmelden={googleAnmelden} onSyncJetzt={syncJetzt} />
+      {!aktuellesVolk && (
+        <VolkListe voelker={daten.voelker} standorte={daten.standorte} onSelect={setAusgewaehlt} onNeu={() => setZeigeNeu(true)} onStandorte={() => setZeigeStandorte(true)} />
+      )}
+      {aktuellesVolk && (
+        <Stockkarte volk={aktuellesVolk} standorte={daten.standorte} onZurueck={() => setAusgewaehlt(null)} onUpdate={volkAktualisieren} onDelete={volkLoeschen} />
+      )}
+      {zeigeNeu && <NeuesVolkDialog standorte={daten.standorte} onSave={neuesVolkAnlegen} onCancel={() => setZeigeNeu(false)} onAddStandort={standortHinzufuegen} />}
+      {zeigeStandorte && <StandortDialog standorte={daten.standorte} onAdd={standortHinzufuegen} onDelete={standortLoeschen} onClose={() => setZeigeStandorte(false)} />}
+      {fehler && <div className="fehler-banner">{fehler}</div>}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<ImkerApp />);
+</script>
+
+<script>
+  // Manuelle Babel-Transformation (siehe Kommentar oben): explizit "klassische"
+  // JSX-Einstellung, damit kein ES-Modul-Import in den kompilierten Code
+  // eingefügt wird — dieser Code läuft als normales, nicht-modulares Skript.
+  (function () {
+    var quelle = document.getElementById("app-source").textContent;
+    var kompiliert = Babel.transform(quelle, {
+      presets: [["react", { runtime: "classic" }]]
+    }).code;
+    var script = document.createElement("script");
+    script.text = kompiliert;
+    document.body.appendChild(script);
+  })();
+</script>
+</body>
+</html>
